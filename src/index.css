@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-ves: #F6F1E8;
+  --color-surface: #FFFCF5;
+  --color-dark: #252923;
+  --color-olive: #59624A;
+  --color-sage: #AAB19A;
+  --color-terracotta: #C9795D;
+  --color-sand: #DCCDB8;
+  --color-muted: #77736A;
+
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Fraunces", Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+@utility font-serif {
+  font-family: var(--font-serif);
+}
+
+@utility font-sans {
+  font-family: var(--font-sans);
+}
+
+/* Base Styles */
+html, body {
+  background-color: #F6F1E8; /* bg-ves */
+  color: #252923; /* dark */
+  font-family: "Plus Jakarta Sans", sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar for editorial look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F6F1E8;
+}
+::-webkit-scrollbar-thumb {
+  background: #DCCDB8;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #AAB19A;
+}
+
+/* Card classes for reuse */
+.card-editorial {
+  background-color: #FFFCF5;
+  border: 1px solid #DCCDB8;
+  transition: all 0.2s ease-in-out;
+}
+.card-editorial:hover {
+  border-color: #AAB19A;
+}
