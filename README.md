@@ -1,16 +1,17 @@
-# React + Vite
+VESLocal is a campus-exclusive professional networking and collaboration platform designed specifically for VESIT students. The platform aims to create a digital ecosystem where students can discover each other's skills, businesses, services, projects, startup ideas, and collaboration opportunities.
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Instead of students having to search through multiple WhatsApp groups or social media platforms for people with specific skills, VESLocal provides a centralized platform where students can find the right people and opportunities within the VESIT community.
 
-Currently, two official plugins are available:
+For example, a student organizing an event can search for a video editor or photographer within the campus. A student starting a business can find a graphic designer or developer to collaborate with. Similarly, students can showcase their own businesses, freelance services, projects, or skills and make them visible to other students.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Main Features Planned for the Complete Project
+Student Registration and Login – Secure registration and authentication for VESIT students.
+Professional Student Profiles – Students can showcase their skills, interests, projects, experience, and portfolio links.
+Opportunity & Community Posts – Students can post requirements, announcements, project ideas, event requirements, and collaboration opportunities.
+Business and Service Sharing – Students can showcase their businesses, freelance services, and skills.
+Project and Startup Idea Sharing – Students can share ideas and find interested teammates or collaborators.
+Talent & Student Discovery – Students can search for peers based on skills, department, year, or interests.
+Collaboration & Team Formation – Students can find teammates for hackathons, projects, events, and startups.
+Real-Time Messaging – Students can communicate with potential collaborators directly.
+Notifications – Users receive notifications for messages, interests, collaborations, and other activities.
+Student and Admin Roles – Students can use the platform while administrators can manage users, posts, and inappropriate content.
