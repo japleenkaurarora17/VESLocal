@@ -1,0 +1,28 @@
+name: VESLocal CD Deployment (Manual Trigger)
+
+# Deployment workflow left disabled for automatic triggers until production
+# credentials and deployment target are confirmed. Can only be triggered manually.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Awaiting Deployment Credentials
+        run: |
+          echo "Deployment target: ${{ github.event.inputs.environment }}"
+          echo "Notice: Deployment is parked until production secrets and hosting provider (e.g., Render, Railway, AWS, or Vercel) are provisioned."

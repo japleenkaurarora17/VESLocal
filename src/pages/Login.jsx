@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, ShieldAlert } from 'lucide-react';
+import { Mail, Lock, ShieldAlert, Loader2 } from 'lucide-react';
+import { authAPI } from '../services/api';
 
 export default function Login({ login }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -29,9 +31,27 @@ export default function Login({ login }) {
       return;
     }
 
-    // Success login
-    login(email);
-    navigate('/dashboard');
+    setLoading(true);
+    try {
+      const res = await authAPI.login({ email, password });
+      if (res && res.token) {
+        login(res.user, res.token);
+      } else {
+        login(email);
+      }
+      navigate('/dashboard');
+    } catch (err) {
+      if (err.isOffline) {
+        // Graceful offline demo fallback
+        console.warn('Backend offline, proceeding in local demo mode.');
+        login(email);
+        navigate('/dashboard');
+      } else {
+        setError(err.message || 'Invalid credentials. Please verify your email and password.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -122,10 +142,20 @@ export default function Login({ login }) {
           {/* Submit button */}
           <button
             type="submit"
-            className="w-full py-3 bg-olive text-surface hover:bg-olive/90 font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 border border-olive mt-6"
+            disabled={loading}
+            className="w-full py-3 bg-olive text-surface hover:bg-olive/90 font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 border border-olive mt-6 disabled:opacity-60"
           >
-            <span>Log In</span>
-            <Lock className="w-3.5 h-3.5" />
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Authenticating...</span>
+              </>
+            ) : (
+              <>
+                <span>Log In</span>
+                <Lock className="w-3.5 h-3.5" />
+              </>
+            )}
           </button>
 
         </form>

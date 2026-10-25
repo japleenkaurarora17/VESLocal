@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Mail, Lock, BookOpen, GraduationCap, ShieldAlert } from 'lucide-react';
+import { User, Mail, Lock, BookOpen, GraduationCap, ShieldAlert, Loader2 } from 'lucide-react';
+import { authAPI } from '../services/api';
 
 export default function Register({ register }) {
   const [name, setName] = useState('');
@@ -10,6 +11,7 @@ export default function Register({ register }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   
   const navigate = useNavigate();
 
@@ -28,7 +30,7 @@ export default function Register({ register }) {
     "Fourth Year"
   ];
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -65,16 +67,33 @@ export default function Register({ register }) {
       return;
     }
 
-    // Call mock register which pushes to students and logs in
-    register({
-      name,
-      email,
-      department,
-      year,
-      password
-    });
-    
-    navigate('/dashboard');
+    setLoading(true);
+    try {
+      const res = await authAPI.register({
+        name,
+        email,
+        password,
+        department,
+        year
+      });
+
+      if (res && res.token) {
+        register(res.user, res.token);
+      } else {
+        register({ name, email, department, year, password });
+      }
+      navigate('/dashboard');
+    } catch (err) {
+      if (err.isOffline) {
+        console.warn('Backend offline, proceeding in local demo mode.');
+        register({ name, email, department, year, password });
+        navigate('/dashboard');
+      } else {
+        setError(err.message || 'Registration failed. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -236,10 +255,20 @@ export default function Register({ register }) {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full py-3 bg-olive text-surface hover:bg-olive/90 font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 border border-olive mt-6"
+            disabled={loading}
+            className="w-full py-3 bg-olive text-surface hover:bg-olive/90 font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 border border-olive mt-6 disabled:opacity-60"
           >
-            <span>Register & Login</span>
-            <User className="w-3.5 h-3.5" />
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Creating Account...</span>
+              </>
+            ) : (
+              <>
+                <span>Register & Login</span>
+                <User className="w-3.5 h-3.5" />
+              </>
+            )}
           </button>
 
         </form>

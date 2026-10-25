@@ -1,22 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Send, MessageSquare, Search, Phone, Video, Info, Circle } from 'lucide-react';
+import { connectSocket, joinChat, sendChatMessage, onChatMessage } from '../services/socket';
 
 export default function Messages({ messages, currentUser, onSendMessage, students }) {
   const [searchParams] = useSearchParams();
   const chatWithParam = searchParams.get('chatWith');
   
-  const [activeChatId, setActiveChatId] = useState(messages[0]?.id || null);
+  const [activeChatId, setActiveChatId] = useState(() => {
+    if (chatWithParam) {
+      const match = messages.find(m => m.studentId === chatWithParam);
+      if (match) return match.id;
+    }
+    return messages[0]?.id || null;
+  });
   const [messageText, setMessageText] = useState('');
 
-  // Switch chat thread if query param is set
+  // Synchronize chat selection if URL param changes
   useEffect(() => {
     if (chatWithParam) {
       const existingChat = messages.find(m => m.studentId === chatWithParam);
       if (existingChat) {
-        setActiveChatId(existingChat.id);
+        if (activeChatId !== existingChat.id) {
+          setActiveChatId(existingChat.id);
+        }
       } else {
-        // Start a mock new thread if not already in chats
         const studentInfo = students.find(s => s.id === chatWithParam);
         if (studentInfo) {
           const newChatId = `chat-${Date.now()}`;
@@ -31,14 +39,32 @@ export default function Messages({ messages, currentUser, onSendMessage, student
             unread: false,
             conversation: []
           };
-          
-          // Append chat to messages list
           messages.unshift(newChat);
           setActiveChatId(newChatId);
         }
       }
     }
-  }, [chatWithParam, messages, students]);
+  }, [chatWithParam, messages, students, activeChatId]);
+
+  // Real-time Socket.IO synchronization (Experiment 8)
+  useEffect(() => {
+    const currentUserId = currentUser?.id || currentUser?._id;
+    connectSocket(currentUserId);
+
+    if (activeChatId) {
+      joinChat(activeChatId);
+    }
+
+    const cleanup = onChatMessage((payload) => {
+      if (payload && payload.chatId === activeChatId && payload.message?.sender !== currentUserId) {
+        onSendMessage(payload.chatId, payload.message);
+      }
+    });
+
+    return () => {
+      if (typeof cleanup === 'function') cleanup();
+    };
+  }, [activeChatId, currentUser, onSendMessage]);
 
   const activeChat = messages.find(c => c.id === activeChatId);
 
@@ -46,12 +72,15 @@ export default function Messages({ messages, currentUser, onSendMessage, student
     e.preventDefault();
     if (!messageText.trim()) return;
 
-    onSendMessage(activeChatId, {
-      sender: currentUser.id,
+    const currentUserId = currentUser.id || currentUser._id;
+    const newMsg = {
+      sender: currentUserId,
       text: messageText.trim(),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    });
+    };
 
+    onSendMessage(activeChatId, newMsg);
+    sendChatMessage(activeChatId, newMsg);
     setMessageText('');
   };
 
@@ -157,7 +186,7 @@ export default function Messages({ messages, currentUser, onSendMessage, student
                   )}
 
                   {activeChat.conversation.map((msg, index) => {
-                    const isOwn = msg.sender === currentUser.id;
+                    const isOwn = msg.sender === (currentUser.id || currentUser._id);
                     return (
                       <div 
                         key={index}

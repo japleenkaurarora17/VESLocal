@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import { useUser } from './context/UserContext';
+import { studentsAPI, opportunitiesAPI } from './services/api';
 
 // Pages
 import Home from './pages/Home';
@@ -19,7 +21,6 @@ import AdminDashboard from './pages/AdminDashboard';
 
 // Mock Data
 import {
-  initialCurrentUser,
   initialStudents,
   initialOpportunities,
   initialBusinesses,
@@ -29,79 +30,69 @@ import {
 } from './data/mockData';
 
 export default function App() {
-  // Session State
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(initialCurrentUser);
+  // Session State from Context API (Experiment 3)
+  const {
+    isLoggedIn,
+    currentUser,
+    setCurrentUser,
+    login,
+    register: registerContext,
+    logout,
+    connectedStudentIds,
+    handleConnect: toggleConnectContext
+  } = useUser();
+
   const [students, setStudents] = useState(initialStudents);
   const [opportunities, setOpportunities] = useState(initialOpportunities);
   const [businesses, setBusinesses] = useState(initialBusinesses);
   const [notifications, setNotifications] = useState(initialNotifications);
   const [messages, setMessages] = useState(initialMessages);
   const [collaborations, setCollaborations] = useState(initialCollaborations);
-  
-  // List of student IDs the user is connected to (initially Rahul Mehta and Sakshi Patil)
-  const [connectedStudentIds, setConnectedStudentIds] = useState(["student-2", "student-3"]);
 
-  // Authentication Helpers
-  const login = (email) => {
-    setIsLoggedIn(true);
-    // If logging in as the demo user Japleen Kaur
-    if (email.toLowerCase() === 'japleen.kaur@ves.ac.in') {
-      setCurrentUser(initialCurrentUser);
-    } else {
-      // Create a mock user session based on email input
-      const extractedName = email.split('@')[0].split('.').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-      setCurrentUser({
-        id: `student-${Date.now()}`,
-        name: extractedName || "VESIT Student",
-        email: email,
-        department: "Information Technology",
-        year: "Third Year",
-        skills: ["React", "UI/UX", "JavaScript"],
-        bio: "VESIT undergraduate student. Excited to discover local collaborations and build cool projects!",
-        connectCount: 5,
-        avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${extractedName || "User"}&backgroundColor=b6e3f4`
+  // Sync with backend API when reachable (Experiment 4 / Integration)
+  useEffect(() => {
+    let isMounted = true;
+    studentsAPI.getAll()
+      .then(res => {
+        if (isMounted && res?.data?.length > 0) {
+          setStudents(res.data);
+        }
+      })
+      .catch(() => {
+        // Retain initial mock students in offline demo mode
       });
-    }
-  };
 
-  const register = (registerData) => {
-    setIsLoggedIn(true);
-    const newStudentId = `student-${Date.now()}`;
-    const newProfile = {
-      id: newStudentId,
-      name: registerData.name,
-      email: registerData.email,
-      department: registerData.department,
-      year: registerData.year,
-      skills: ["React", "Figma"],
-      bio: "Freshly registered student on VESLocal. Let's connect!",
-      connectCount: 0,
-      avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${registerData.name}&backgroundColor=ffd5dc`
-    };
+    opportunitiesAPI.getAll()
+      .then(res => {
+        if (isMounted && res?.data?.length > 0) {
+          setOpportunities(res.data);
+        }
+      })
+      .catch(() => {
+        // Retain initial mock opportunities in offline demo mode
+      });
 
-    // Update students list
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleRegister = (registerData, token = null) => {
+    const newProfile = registerContext(registerData, token);
     setStudents(prev => [...prev, newProfile]);
-    setCurrentUser(newProfile);
-  };
-
-  const logout = () => {
-    setIsLoggedIn(false);
-    setCurrentUser(initialCurrentUser);
-    setConnectedStudentIds(["student-2", "student-3"]);
   };
 
   // Interactions Helper Methods
-  
+
   // Toggle "I'm Interested" state on an opportunity
   const handleToggleInterest = (oppId) => {
-    setOpportunities(prev => 
+    setOpportunities(prev =>
       prev.map(opp => {
-        if (opp.id === oppId) {
-          const alreadyInterested = opp.interestedStudents.includes(currentUser.id);
+        const id = opp.id || opp._id;
+        if (id === oppId) {
+          const currentUserId = currentUser.id || currentUser._id;
+          const alreadyInterested = opp.interestedStudents?.includes(currentUserId);
           const updatedInterested = alreadyInterested
-            ? opp.interestedStudents.filter(id => id !== currentUser.id)
-            : [...opp.interestedStudents, currentUser.id];
+            ? opp.interestedStudents.filter(sid => sid !== currentUserId)
+            : [...(opp.interestedStudents || []), currentUserId];
 
           // Post a notification if they expressed interest
           if (!alreadyInterested) {
@@ -131,7 +122,7 @@ export default function App() {
       id: `opp-${Date.now()}`,
       title: oppData.title,
       description: oppData.description,
-      authorId: currentUser.id,
+      authorId: currentUser.id || currentUser._id,
       authorName: currentUser.name,
       authorAvatar: currentUser.avatarUrl,
       skillsNeeded: oppData.skillsNeeded,
@@ -158,7 +149,7 @@ export default function App() {
     const newBiz = {
       id: `biz-${Date.now()}`,
       name: bizData.name,
-      ownerId: currentUser.id,
+      ownerId: currentUser.id || currentUser._id,
       ownerName: currentUser.name,
       category: bizData.category,
       description: bizData.description,
@@ -183,16 +174,13 @@ export default function App() {
 
   // Connect or disconnect from student profile
   const handleConnect = (studentId) => {
+    toggleConnectContext(studentId);
     const isConnected = connectedStudentIds.includes(studentId);
-    let updated;
-    if (isConnected) {
-      updated = connectedStudentIds.filter(id => id !== studentId);
-    } else {
-      updated = [...connectedStudentIds, studentId];
-      
-      const targetStudent = students.find(s => s.id === studentId);
+
+    if (!isConnected) {
+      const targetStudent = students.find(s => s.id === studentId || s._id === studentId);
       if (targetStudent) {
-        // Create matching mock notification
+        // Create matching notification
         const newNotif = {
           id: `notif-${Date.now()}`,
           text: `You are now connected with ${targetStudent.name} (${targetStudent.department}).`,
@@ -207,7 +195,7 @@ export default function App() {
         if (!threadExists) {
           const newThread = {
             id: `chat-${Date.now()}`,
-            studentId: targetStudent.id,
+            studentId: targetStudent.id || targetStudent._id,
             studentName: targetStudent.name,
             avatarUrl: targetStudent.avatarUrl,
             department: targetStudent.department,
@@ -220,12 +208,11 @@ export default function App() {
         }
       }
     }
-    setConnectedStudentIds(updated);
   };
 
   // Direct chat send handler
   const handleSendMessage = (chatId, messageObj) => {
-    setMessages(prev => 
+    setMessages(prev =>
       prev.map(chat => {
         if (chat.id === chatId) {
           return {
@@ -255,10 +242,10 @@ export default function App() {
 
   // Moderator actions
   const handleRemoveOpportunity = (oppId) => {
-    setOpportunities(prev => prev.filter(opp => opp.id !== oppId));
+    setOpportunities(prev => prev.filter(opp => (opp.id || opp._id) !== oppId));
   };
 
-  const handleFlagBusiness = (bizId) => {
+  const handleFlagBusiness = () => {
     alert("Venture flagged. A review warning has been sent to the listing owner.");
   };
 
@@ -275,9 +262,9 @@ export default function App() {
     <BrowserRouter>
       <div className="flex flex-col min-h-screen bg-bg-ves text-dark">
         {/* Navigation header */}
-        <Navbar 
-          isLoggedIn={isLoggedIn} 
-          currentUser={currentUser} 
+        <Navbar
+          isLoggedIn={isLoggedIn}
+          currentUser={currentUser}
           logout={logout}
           notifications={notifications}
           messages={messages}
@@ -287,40 +274,40 @@ export default function App() {
         <main className="flex-grow flex flex-col">
           <Routes>
             {/* Landing page */}
-            <Route 
-              path="/" 
+            <Route
+              path="/"
               element={
-                <Home 
-                  opportunities={opportunities} 
-                  businesses={businesses} 
+                <Home
+                  opportunities={opportunities}
+                  businesses={businesses}
                   currentUser={currentUser}
                   isLoggedIn={isLoggedIn}
                 />
-              } 
+              }
             />
 
             {/* Account authentication */}
-            <Route 
-              path="/login" 
+            <Route
+              path="/login"
               element={
-                isLoggedIn 
-                  ? <Navigate to="/dashboard" replace /> 
+                isLoggedIn
+                  ? <Navigate to="/dashboard" replace />
                   : <Login login={login} />
-              } 
+              }
             />
-            
-            <Route 
-              path="/register" 
+
+            <Route
+              path="/register"
               element={
-                isLoggedIn 
-                  ? <Navigate to="/dashboard" replace /> 
-                  : <Register register={register} />
-              } 
+                isLoggedIn
+                  ? <Navigate to="/dashboard" replace />
+                  : <Register register={handleRegister} />
+              }
             />
 
             {/* Authenticated dashboard */}
-            <Route 
-              path="/dashboard" 
+            <Route
+              path="/dashboard"
               element={
                 isLoggedIn ? (
                   <Dashboard
@@ -337,16 +324,16 @@ export default function App() {
                 ) : (
                   <Navigate to="/login" replace />
                 )
-              } 
+              }
             />
 
             {/* Students directory */}
-            <Route 
-              path="/discover" 
+            <Route
+              path="/discover"
               element={
                 isLoggedIn ? (
-                  <Discover 
-                    students={students} 
+                  <Discover
+                    students={students}
                     currentUser={currentUser}
                     connectedStudentIds={connectedStudentIds}
                     onConnect={handleConnect}
@@ -354,16 +341,16 @@ export default function App() {
                 ) : (
                   <Navigate to="/login" replace />
                 )
-              } 
+              }
             />
 
             {/* Opportunities catalog */}
-            <Route 
-              path="/opportunities" 
+            <Route
+              path="/opportunities"
               element={
                 isLoggedIn ? (
-                  <Opportunities 
-                    opportunities={opportunities} 
+                  <Opportunities
+                    opportunities={opportunities}
                     currentUser={currentUser}
                     onToggleInterest={handleToggleInterest}
                     onAddOpportunity={handleAddOpportunity}
@@ -371,32 +358,32 @@ export default function App() {
                 ) : (
                   <Navigate to="/login" replace />
                 )
-              } 
+              }
             />
 
             {/* Startups market */}
-            <Route 
-              path="/businesses" 
+            <Route
+              path="/businesses"
               element={
                 isLoggedIn ? (
-                  <Businesses 
-                    businesses={businesses} 
+                  <Businesses
+                    businesses={businesses}
                     currentUser={currentUser}
                     onAddBusiness={handleAddBusiness}
                   />
                 ) : (
                   <Navigate to="/login" replace />
                 )
-              } 
+              }
             />
 
             {/* Student portfolio profiles */}
-            <Route 
-              path="/profile/:id" 
+            <Route
+              path="/profile/:id"
               element={
                 isLoggedIn ? (
-                  <Profile 
-                    students={students} 
+                  <Profile
+                    students={students}
                     currentUser={currentUser}
                     onUpdateCurrentUser={setCurrentUser}
                     connectedStudentIds={connectedStudentIds}
@@ -406,15 +393,15 @@ export default function App() {
                 ) : (
                   <Navigate to="/login" replace />
                 )
-              } 
+              }
             />
 
             {/* Teams panel */}
-            <Route 
-              path="/teams" 
+            <Route
+              path="/teams"
               element={
                 isLoggedIn ? (
-                  <Collaboration 
+                  <Collaboration
                     collaborations={collaborations}
                     currentUser={currentUser}
                     onAddCollaboration={handleAddCollaboration}
@@ -423,16 +410,16 @@ export default function App() {
                 ) : (
                   <Navigate to="/login" replace />
                 )
-              } 
+              }
             />
 
             {/* Notification logger */}
-            <Route 
-              path="/notifications" 
+            <Route
+              path="/notifications"
               element={
                 isLoggedIn ? (
-                  <Notifications 
-                    notifications={notifications} 
+                  <Notifications
+                    notifications={notifications}
                     onMarkAllRead={handleMarkAllRead}
                     onMarkRead={handleMarkRead}
                     currentUser={currentUser}
@@ -441,16 +428,16 @@ export default function App() {
                 ) : (
                   <Navigate to="/login" replace />
                 )
-              } 
+              }
             />
 
             {/* DMs window */}
-            <Route 
-              path="/messages" 
+            <Route
+              path="/messages"
               element={
                 isLoggedIn ? (
-                  <Messages 
-                    messages={messages} 
+                  <Messages
+                    messages={messages}
                     currentUser={currentUser}
                     onSendMessage={handleSendMessage}
                     students={students}
@@ -458,17 +445,17 @@ export default function App() {
                 ) : (
                   <Navigate to="/login" replace />
                 )
-              } 
+              }
             />
 
             {/* Mod portal */}
-            <Route 
-              path="/admin" 
+            <Route
+              path="/admin"
               element={
                 isLoggedIn ? (
-                  <AdminDashboard 
-                    students={students} 
-                    opportunities={opportunities} 
+                  <AdminDashboard
+                    students={students}
+                    opportunities={opportunities}
                     businesses={businesses}
                     onRemoveOpportunity={handleRemoveOpportunity}
                     onFlagBusiness={handleFlagBusiness}
@@ -476,7 +463,7 @@ export default function App() {
                 ) : (
                   <Navigate to="/login" replace />
                 )
-              } 
+              }
             />
 
             {/* Fallback */}

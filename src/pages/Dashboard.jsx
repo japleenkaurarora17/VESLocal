@@ -160,7 +160,6 @@ export default function Dashboard({
 
             {/* Quick action button */}
             <button
-              onClick={() => setIsOpen(true)} // Wait, we can toggle inline posting panel
               onClick={() => setIsPosting(!isPosting)}
               className="w-full sm:w-auto px-4 py-2 bg-terracotta text-surface hover:bg-terracotta/90 text-xs font-bold flex items-center justify-center gap-1 transition-colors shrink-0"
             >
