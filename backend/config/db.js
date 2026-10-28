@@ -1,5 +1,8 @@
-import mongoose from 'mongoose';
 
+import mongoose from 'mongoose';
+import dns from 'node:dns';
+
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 let isConnected = false;
 
 export async function connectDB() {
@@ -16,7 +19,9 @@ export async function connectDB() {
       serverSelectionTimeoutMS: 5000,
     });
     isConnected = true;
-    console.log(`[MongoDB] Connected to database: ${conn.connection.host}`);
+    // conn.connection.host can be undefined for SRV/Atlas URIs; fall back gracefully
+    const dbHost = conn.connection.host || conn.connection.db?.databaseName || 'Atlas (SRV)';
+    console.log(`[MongoDB] Connected to database: ${dbHost}`);
     return true;
   } catch (error) {
     console.error(`[MongoDB] Connection failed: ${error.message}`);

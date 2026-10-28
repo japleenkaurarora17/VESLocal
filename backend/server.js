@@ -7,8 +7,14 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables (except when explicitly running in test mode)
+const isTestEnv = process.env.NODE_ENV === 'test' ||
+  process.execArgv.some(arg => arg.includes('test')) ||
+  process.argv.some(arg => arg.includes('test'));
+
+if (!isTestEnv) {
+  dotenv.config();
+}
 
 // Local imports
 import connectDB, { getDBStatus } from './config/db.js';
@@ -126,10 +132,18 @@ app.use(errorHandler);
 
 // Server startup helper
 export async function startServer(port = process.env.PORT || 5000) {
+  if (server.listening) {
+    return server;
+  }
   await connectDB();
-  return new Promise((resolve) => {
-    server.listen(port, '127.0.0.1', () => {
-      const actualPort = server.address().port;
+  return new Promise((resolve, reject) => {
+    const onError = (err) => {
+      server.removeListener('listening', onListening);
+      reject(err);
+    };
+    const onListening = () => {
+      server.removeListener('error', onError);
+      const actualPort = server.address()?.port;
       if (process.env.NODE_ENV !== 'test') {
         console.log(`===============================================`);
         console.log(`🚀 VESLocal API Server running on port ${actualPort}`);
@@ -139,12 +153,61 @@ export async function startServer(port = process.env.PORT || 5000) {
         console.log(`===============================================`);
       }
       resolve(server);
-    });
+    };
+
+    server.once('error', onError);
+    server.once('listening', onListening);
+
+    // If a string path is passed (e.g., named pipe/unix domain socket), listen on it directly
+    if (typeof port === 'string' && (port.startsWith('/') || port.startsWith('\\\\'))) {
+      server.listen(port);
+      return;
+    }
+
+    // Bind to 0.0.0.0 in production/CI so Render and containers can reach it,
+    // and so the test runner can connect via 127.0.0.1 on the same machine.
+    const host = process.env.NODE_ENV === 'test' ? '127.0.0.1' : '0.0.0.0';
+    server.listen(port, host);
   });
 }
 
-// Auto-start server only when not running inside a test suite
-if (process.env.NODE_ENV !== 'test' && !process.argv.some(arg => arg.includes('--test'))) {
+// Server shutdown helper
+export async function stopServer() {
+  return new Promise((resolve) => {
+    if (typeof server.closeAllConnections === 'function') {
+      try {
+        server.closeAllConnections();
+      } catch {
+        // ignore
+      }
+    }
+    if (io) {
+      try {
+        io.close(() => {
+          if (server.listening) {
+            server.close(() => resolve());
+          } else {
+            resolve();
+          }
+        });
+        return;
+      } catch {
+        // ignore
+      }
+    }
+    if (server.listening) {
+      server.close(() => resolve());
+    } else {
+      resolve();
+    }
+  });
+}
+
+// Determine if this file is executed directly as the entry point
+const isMainModule = Boolean(process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]));
+
+// Auto-start server only when executed directly and not running inside a test suite
+if (isMainModule && !isTestEnv) {
   startServer();
 }
 

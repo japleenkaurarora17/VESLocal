@@ -1,23 +1,38 @@
+// Run tests in dedicated test environment with in-memory fallback
+process.env.NODE_ENV = 'test';
+process.env.MONGODB_URI = '';
+process.env.JWT_SECRET = 'ci_test_secret_key_veslocal_2026_test_only';
+
 import test from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
-import { startServer, server } from '../server.js';
+import { startServer, stopServer, io } from '../server.js';
 
 let activePort = null;
+let activeSocketPath = null;
 let runningServer = null;
 
 // Helper to make HTTP requests against express app
 function request(options, body = null) {
   return new Promise((resolve, reject) => {
-    const req = http.request({
-      hostname: '127.0.0.1',
-      port: activePort,
+    const reqOptions = {
       ...options,
+      agent: false,
       headers: {
         'Content-Type': 'application/json',
+        'Connection': 'close',
         ...(options.headers || {})
       }
-    }, (res) => {
+    };
+
+    if (activeSocketPath) {
+      reqOptions.socketPath = activeSocketPath;
+    } else {
+      reqOptions.hostname = '127.0.0.1';
+      reqOptions.port = activePort;
+    }
+
+    const req = http.request(reqOptions, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
@@ -45,14 +60,37 @@ function request(options, body = null) {
 }
 
 test('VESLocal Full-Stack Experiment API Test Suite', async (t) => {
-  // Setup: Start server on ephemeral port (0)
-  runningServer = await startServer(0);
-  activePort = runningServer.address().port;
+  // Setup: Use named pipe on Windows or domain socket on Unix if sandbox prevents loopback TCP
+  const isWindows = process.platform === 'win32';
+  const pipeName = isWindows
+    ? `//./pipe/veslocal-test-${Date.now()}`
+    : `/tmp/veslocal-test-${Date.now()}.sock`;
 
-  t.after(() => {
-    return new Promise(resolve => {
-      runningServer.close(resolve);
-    });
+  try {
+    runningServer = await startServer(pipeName);
+    activeSocketPath = pipeName;
+  } catch {
+    runningServer = await startServer(0);
+    activePort = runningServer.address().port;
+  }
+
+  t.after(async () => {
+    if (typeof stopServer === 'function') {
+      await stopServer();
+    } else {
+      if (typeof runningServer?.closeAllConnections === 'function') {
+        try { runningServer.closeAllConnections(); } catch {}
+      }
+      await new Promise(resolve => {
+        io.close(() => {
+          if (runningServer?.listening) {
+            runningServer.close(() => resolve());
+          } else {
+            resolve();
+          }
+        });
+      });
+    }
   });
 
   let createdStudentId = null;

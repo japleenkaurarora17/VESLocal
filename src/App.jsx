@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -448,11 +448,11 @@ export default function App() {
               }
             />
 
-            {/* Mod portal */}
+            {/* Mod portal - admin role required */}
             <Route
               path="/admin"
               element={
-                isLoggedIn ? (
+                isLoggedIn && currentUser?.role === 'admin' ? (
                   <AdminDashboard
                     students={students}
                     opportunities={opportunities}
@@ -460,6 +460,8 @@ export default function App() {
                     onRemoveOpportunity={handleRemoveOpportunity}
                     onFlagBusiness={handleFlagBusiness}
                   />
+                ) : isLoggedIn ? (
+                  <Navigate to="/dashboard" replace />
                 ) : (
                   <Navigate to="/login" replace />
                 )

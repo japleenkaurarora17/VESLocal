@@ -6,25 +6,28 @@ import Student from '../models/Student.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
 import { getDBStatus } from '../config/db.js';
+import { getJwtSecret } from '../config/jwtConfig.js';
 
 const router = express.Router();
 
 // Helper to generate signed JWT
 const generateToken = (payload) => {
-  const secret = process.env.JWT_SECRET || 'fallback_development_secret_veslocal_2026';
+  const secret = getJwtSecret();
   return jwt.sign(payload, secret, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   });
 };
 
 // In-memory demo users store fallback
+// Passwords: both demo accounts use 'adminPassword123' for local testing only.
+// These are NOT production credentials. Replace with real DB records in production.
 let memoryUsers = [
   {
     _id: "user-1",
     id: "user-1",
     name: "Japleen Kaur",
     email: "japleen.kaur@ves.ac.in",
-    passwordHash: "$2a$10$w09d84zJ1b67f.L8s7tQ4.X38bXfD7lS6sB2sA1q9p4y0", // demo hash
+    passwordHash: "$2b$10$vecH3WefR.LXvkSdSPdDtuW3w4idNna1P47xOGlOZwVnkG76yBMbO",
     role: "student",
     department: "Information Technology",
     year: "Third Year"
@@ -34,7 +37,7 @@ let memoryUsers = [
     id: "user-admin",
     name: "Admin Moderator",
     email: "admin.moderator@ves.ac.in",
-    passwordHash: "$2a$10$w09d84zJ1b67f.L8s7tQ4.X38bXfD7lS6sB2sA1q9p4y0",
+    passwordHash: "$2b$10$vecH3WefR.LXvkSdSPdDtuW3w4idNna1P47xOGlOZwVnkG76yBMbO",
     role: "admin",
     department: "Information Technology",
     year: "Fourth Year"
@@ -114,7 +117,14 @@ router.post('/register', authLimiter, async (req, res, next) => {
       });
     }
 
-    // Memory fallback
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service is temporarily unavailable. Registration disabled.'
+      });
+    }
+
+    // Memory fallback (local testing/development only)
     const existing = memoryUsers.find(u => u.email === normalizedEmail);
     if (existing) {
       return res.status(409).json({ success: false, message: 'User already exists with this VESIT email' });
@@ -210,28 +220,25 @@ router.post('/login', authLimiter, async (req, res, next) => {
       });
     }
 
-    // Memory fallback
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service is temporarily unavailable. Authentication disabled.'
+      });
+    }
+
+    // Memory fallback (local testing/development only)
     let user = memoryUsers.find(u => u.email === normalizedEmail);
     if (!user) {
-      // In demo mode, if any valid @ves.ac.in email is provided with a 4+ char password, allow demo session
-      if (normalizedEmail.endsWith('@ves.ac.in') && password.length >= 4) {
-        const extractedName = normalizedEmail.split('@')[0].split('.').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-        const salt = await bcrypt.genSalt(10);
-        const hash = await bcrypt.hash(password, salt);
-        user = {
-          _id: `user-${Date.now()}`,
-          id: `user-${Date.now()}`,
-          name: extractedName || 'VESIT Student',
-          email: normalizedEmail,
-          passwordHash: hash,
-          role: normalizedEmail.includes('admin') ? 'admin' : 'student',
-          department: 'Information Technology',
-          year: 'Third Year'
-        };
-        memoryUsers.push(user);
-      } else {
-        return res.status(401).json({ success: false, message: 'Invalid credentials' });
-      }
+      // In demo mode without DB: only allow pre-seeded demo accounts.
+      // Do NOT auto-create sessions for unknown emails — that would bypass authentication entirely.
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    // Verify password against stored hash
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     const token = generateToken({

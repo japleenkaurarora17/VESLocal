@@ -6,6 +6,8 @@ export const apiLimiter = rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false, ip: false },
+  keyGenerator: (req) => req.ip || req.socket?.remoteAddress || '127.0.0.1',
   message: {
     success: false,
     message: 'Too many requests from this IP address. Please try again after 15 minutes.'
@@ -18,6 +20,8 @@ export const authLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false, ip: false },
+  keyGenerator: (req) => req.ip || req.socket?.remoteAddress || '127.0.0.1',
   message: {
     success: false,
     message: 'Too many authentication attempts. Please try again after 15 minutes.'
